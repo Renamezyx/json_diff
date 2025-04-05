@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM registry.cn-hangzhou.aliyuncs.com/linweiyuan/node:18-alpine
 
 WORKDIR /app
 
