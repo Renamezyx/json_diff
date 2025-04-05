@@ -5,7 +5,7 @@
   "main": "index.html",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "./node_modules/serve/bin/serve.js ."
+    "start": "node ./node_modules/serve/bin/serve.js . -p 3000"
   },
   "repository": {
     "type": "git",

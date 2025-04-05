@@ -13,6 +13,116 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <link rel="manifest" href="/manifest.json">
     <link rel="icon" type="image/png" href="/img/icon-512.png">
+    <style>
+      .api-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: #1d1f21;
+        color: white;
+        padding: 10px;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease;
+        z-index: 1000;
+      }
+      
+      .api-bar.expanded {
+        transform: translateY(0);
+      }
+      
+      .api-bar-toggle {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background: #2c3e50;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        z-index: 1001;
+        border-radius: 4px;
+      }
+      
+      .api-inputs {
+        display: flex;
+        gap: 20px;
+        margin-top: 10px;
+      }
+      
+      .api-input-group {
+        flex: 1;
+      }
+      
+      .api-input-group input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-top: 5px;
+        background-color: #ffffff;
+        color: #000000;
+      }
+      
+      .api-input-group label {
+        color: #ffffff;
+        display: block;
+        margin-bottom: 5px;
+      }
+      
+      .api-fetch-btn {
+        background: #3498db;
+        color: white;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 10px;
+      }
+      
+      .api-fetch-btn:hover {
+        background: #2980b9;
+      }
+      
+      .error-message {
+        color: #e74c3c;
+        margin-top: 5px;
+        font-size: 14px;
+      }
+      
+      .polling-controls {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+      
+      .polling-toggle {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .polling-interval {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      
+      .polling-interval input {
+        width: 60px;
+        padding: 4px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: #ffffff;
+        color: #000000;
+      }
+      
+      .polling-status {
+        color: #2ecc71;
+        font-size: 14px;
+      }
+    </style>
   </head>
   <body>
     <header id="header">
@@ -55,13 +165,7 @@
       <div id="history-container" class="history-container">
 
       </div>
-      <div class="bottom-left-container">
-        <a href="https://www.zipgoals.com?ref=json-diff" title="Your goals momentum journal for 2025!">
-          <img src="/img/zipgoals-promo.001.webp" alt="Your goals momentum journal for 2025!"/>
-          <p><strong>Zipgoals</strong> Your goals momentum journal for 2025!</p>
-        </a>
-      </div>
-      <a href="/sponsor/" title="Be a sponsor">Be a sponsor 🤝</a>
+
     </div>
     <div class="diff-inputs">
       <div id="left-input" class="json-diff-input split">
@@ -80,6 +184,37 @@
           <a class="input-expand" href="#">☐</a>
         </span>
       </div>
+    </div>
+    <button class="api-bar-toggle">API 输入</button>
+    <div class="api-bar">
+      <div class="api-inputs">
+        <div class="api-input-group">
+          <label>左侧 JSON API URL:</label>
+          <input type="text" id="left-api-url" placeholder="输入 API URL">
+          <div class="error-message" id="left-error"></div>
+        </div>
+        <div class="api-input-group">
+          <label>右侧 JSON API URL:</label>
+          <input type="text" id="right-api-url" placeholder="输入 API URL">
+          <div class="error-message" id="right-error"></div>
+        </div>
+      </div>
+      <div class="polling-controls">
+        <div class="polling-toggle">
+          <label>
+            <input type="checkbox" id="polling-toggle">
+            启用轮询
+          </label>
+        </div>
+        <div class="polling-interval">
+          <label>
+            轮询间隔(秒):
+            <input type="number" id="polling-interval" value="5" min="1" max="3600">
+          </label>
+        </div>
+        <div class="polling-status" id="polling-status"></div>
+      </div>
+      <button class="api-fetch-btn" onclick="fetchApiData()">获取数据</button>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.8.3/underscore-min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
@@ -199,6 +334,98 @@
         }
         $('#' + side + '-input').addClass(sideClass);
         $('#' + otherSide + '-input').addClass(otherSideClass);
+      }
+
+      // API 相关功能
+      document.querySelector('.api-bar-toggle').addEventListener('click', function() {
+        document.querySelector('.api-bar').classList.toggle('expanded');
+      });
+      
+      let pollingTimer = null;
+      let isPolling = false;
+      let lastLeftData = null; // 存储上一次的左侧API结果
+      
+      // 轮询相关功能
+      document.getElementById('polling-toggle').addEventListener('change', function(e) {
+        isPolling = e.target.checked;
+        if (isPolling) {
+          startPolling();
+        } else {
+          stopPolling();
+        }
+      });
+      
+      document.getElementById('polling-interval').addEventListener('change', function(e) {
+        if (isPolling) {
+          stopPolling();
+          startPolling();
+        }
+      });
+      
+      function startPolling() {
+        const interval = document.getElementById('polling-interval').value * 1000;
+        document.getElementById('polling-status').textContent = '轮询中...';
+        pollingTimer = setInterval(fetchApiData, interval);
+      }
+      
+      function stopPolling() {
+        if (pollingTimer) {
+          clearInterval(pollingTimer);
+          pollingTimer = null;
+        }
+        document.getElementById('polling-status').textContent = '已停止';
+      }
+      
+      // 修改 fetchApiData 函数，添加轮询状态更新
+      async function fetchApiData() {
+        const leftUrl = document.getElementById('left-api-url').value;
+        const rightUrl = document.getElementById('right-api-url').value;
+        
+        if (!leftUrl && !rightUrl) {
+          stopPolling();
+          document.getElementById('polling-toggle').checked = false;
+          isPolling = false;
+          return;
+        }
+        
+        try {
+          if (leftUrl) {
+            const leftResponse = await fetch(leftUrl);
+            const leftData = await leftResponse.json();
+            const views = getInputViews();
+            
+            if (!rightUrl && lastLeftData) {
+              // 如果右侧URL为空且有上一次的左侧数据，则对比当前和上一次的结果
+              views.left.codemirror.setValue(JSON.stringify(lastLeftData, null, 2));
+              views.right.codemirror.setValue(JSON.stringify(leftData, null, 2));
+            } else {
+              // 正常情况，更新左侧数据
+              views.left.codemirror.setValue(JSON.stringify(leftData, null, 2));
+            }
+            
+            lastLeftData = leftData; // 保存当前结果作为下一次的上一次结果
+            document.getElementById('left-error').textContent = '';
+          }
+          
+          if (rightUrl) {
+            const rightResponse = await fetch(rightUrl);
+            const rightData = await rightResponse.json();
+            const views = getInputViews();
+            views.right.codemirror.setValue(JSON.stringify(rightData, null, 2));
+            document.getElementById('right-error').textContent = '';
+          }
+          
+          compareJson();
+          document.getElementById('polling-status').textContent = '上次更新: ' + new Date().toLocaleTimeString();
+        } catch (error) {
+          if (leftUrl) {
+            document.getElementById('left-error').textContent = '获取左侧数据失败: ' + error.message;
+          }
+          if (rightUrl) {
+            document.getElementById('right-error').textContent = '获取右侧数据失败: ' + error.message;
+          }
+          document.getElementById('polling-status').textContent = '更新失败: ' + error.message;
+        }
       }
     </script>
     <script defer src="//tomato.blitlabs.com/tomato.php?siteId=6"></script>

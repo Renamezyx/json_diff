@@ -123,6 +123,94 @@
 
   var leftInputView = new JsonInputView(document.getElementById('json-diff-left'), currentDiff && currentDiff.left);
   var rightInputView = new JsonInputView(document.getElementById('json-diff-right'), currentDiff && currentDiff.right);
+  
+  // 将getInputViews函数移到全局作用域
+  window.getInputViews = function() {
+    return {
+      left: leftInputView,
+      right: rightInputView
+    };
+  };
+  
+  // API 相关变量
+  var autoRefreshTimer = null;
+  var lastJson1 = null;
+  var lastJson2 = null;
+
+  // API 获取函数
+  async function fetchJsonFromApi(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return JSON.stringify(data, null, 2);
+    } catch (error) {
+      console.error('获取 JSON 失败:', error);
+      return null;
+    }
+  }
+
+  // 更新 JSON 内容
+  function updateJsonContent(json1, json2) {
+    if (json1) {
+      leftInputView.setText(json1);
+    }
+    if (json2) {
+      rightInputView.setText(json2);
+    }
+    compareJson();
+  }
+
+  // 获取 JSON1
+  async function fetchJson1() {
+    const url = document.getElementById('left-api-url').value;
+    if (!url) return;
+    
+    const json = await fetchJsonFromApi(url);
+    if (json) {
+      lastJson1 = json;
+      updateJsonContent(json, lastJson2);
+    }
+  }
+
+  // 获取 JSON2
+  async function fetchJson2() {
+    const url = document.getElementById('right-api-url').value;
+    if (!url) return;
+    
+    const json = await fetchJsonFromApi(url);
+    if (json) {
+      lastJson2 = json;
+      updateJsonContent(lastJson1, json);
+    }
+  }
+
+  // 自动刷新控制
+  function toggleAutoRefresh() {
+    const autoRefresh = document.getElementById('polling-toggle').checked;
+    const interval = document.getElementById('polling-interval').value;
+    
+    if (autoRefreshTimer) {
+      clearInterval(autoRefreshTimer);
+      autoRefreshTimer = null;
+    }
+    
+    if (autoRefresh) {
+      autoRefreshTimer = setInterval(async () => {
+        await fetchJson1();
+        await fetchJson2();
+      }, interval * 1000);
+    }
+  }
+
+  // 绑定事件
+  document.getElementById('left-api-url').addEventListener('change', fetchJson1);
+  document.getElementById('right-api-url').addEventListener('change', fetchJson2);
+  document.getElementById('polling-toggle').addEventListener('change', toggleAutoRefresh);
+  document.getElementById('polling-interval').addEventListener('change', toggleAutoRefresh);
+
   leftInputView.on('change', onInputChange);
   rightInputView.on('change', onInputChange);
   leftInputView.codemirror.on('scroll', function () {
@@ -232,12 +320,6 @@
     $('#history-container').html(html);
   }
 
-  window.getInputViews = function() {
-    return {
-      left: leftInputView,
-      right: rightInputView
-    };
-  }
   window.compareJson = compareJson;
   window.onClickHistoryItem = function (i) {
     var item = diffHistory[i];
